@@ -9,7 +9,12 @@ const fs = require('fs');
 const yaml = require('js-yaml');
 const { ensurePrsExist, readGHKey, checkGHKeyExists } = require('./github');
 const colors = require('colors');
-const { DEFAULT_REMOTE, DEFAULT_BASE_BRANCH, MERGE_STEP_DELAY_MS, MERGE_STEP_DELAY_WAIT_FOR_LOCK } = require('./consts');
+const {
+  DEFAULT_REMOTE,
+  DEFAULT_BASE_BRANCH,
+  MERGE_STEP_DELAY_MS,
+  MERGE_STEP_DELAY_WAIT_FOR_LOCK,
+} = require('./consts');
 const path = require('path');
 // @ts-ignore
 const package = require('./package.json');
@@ -130,7 +135,7 @@ function getBranchesInCurrentTrain(branchConfig) {
  */
 function getCombinedBranch(branchConfig) {
   const combinedBranch = /** @type {Object<string, {combined: boolean}>} */ branchConfig.find(cfg => {
-    if (typeof cfg === 'string') {
+    if (!cfg || typeof cfg === 'string') {
       return false;
     }
     const branchName = Object.keys(cfg)[0];
@@ -212,6 +217,7 @@ async function main() {
   }
 
   const defaultBase = getConfigOption(ymlConfig, 'prs.main-branch-name') || DEFAULT_BASE_BRANCH;
+  const draftByDefault = !!getConfigOption(ymlConfig, 'prs.draft-by-default');
 
   program
     .version(package.version)
@@ -223,6 +229,8 @@ async function main() {
     .option('--push-merged', 'Push all branches (including those that have already been merged into the base branch)')
     .option('--remote <remote>', 'Set remote to push to. Defaults to "origin"')
     .option('-b, --base <base>', `Specify the base branch to use for the first and combined PRs.`, defaultBase)
+    .option('-d, --draft', 'Create PRs in draft mode', draftByDefault)
+    .option('--no-draft', 'Do not create PRs in draft mode', !draftByDefault)
     .option('-c, --create-prs', 'Create GitHub PRs from your train branches');
 
   program.on('--help', () => {
@@ -252,6 +260,9 @@ async function main() {
   program.createPrs && checkGHKeyExists();
 
   const baseBranch = program.base; // will have default value if one is not supplied
+
+  const draft = program.draft != null ? program.draft : draftByDefault;
+
   const { current: currentBranch, all: allBranches } = await sg.branchLocal();
   const trainCfg = await getBranchesConfigInCurrentTrain(sg, ymlConfig);
   if (!trainCfg) {
@@ -313,6 +324,7 @@ async function main() {
       allBranches: sortedTrainBranches,
       combinedBranch: combinedTrainBranch,
       remote: program.remote,
+      draft,
       baseBranch,
     });
     return;

@@ -9,7 +9,8 @@ const fs = require('fs');
 const get = require('lodash/get');
 const colors = require('colors');
 const emoji = require('node-emoji');
-const simpleGit = require('simple-git/promise');
+const table = require('markdown-table');
+const width = require('string-width');
 
 /**
  *
@@ -33,17 +34,18 @@ async function constructPrMsg(sg, branch) {
  * @param {string} combinedBranch
  */
 function constructTrainNavigation(branchToPrDict, currentBranch, combinedBranch) {
-  let contents = '<pr-train-toc>\n\n#### PR chain:\n';
-  contents = Object.keys(branchToPrDict).reduce((output, branch) => {
-    const maybeHandRight = branch === currentBranch ? '👉 ' : '';
-    const maybeHandLeft = branch === currentBranch ? ' 👈 **YOU ARE HERE**' : '';
+  let contents = '<pr-train-toc>\n\n';
+  let tableData = [['', 'PR', 'Description']];
+  Object.keys(branchToPrDict).forEach((branch) => {
+    const maybeHandRight = branch === currentBranch ? '👉 ' : ' ';
     const combinedInfo = branch === combinedBranch ? ' **[combined branch]** ' : ' ';
-    output += `${maybeHandRight}#${branchToPrDict[branch].pr}${combinedInfo}(${branchToPrDict[
-      branch
-    ].title.trim()})${maybeHandLeft}`;
-    return output + '\n';
-  }, contents);
-  contents += '\n</pr-train-toc>';
+    const prTitle = branchToPrDict[branch].title.trim();
+    const prNumber = `#${branchToPrDict[branch].pr}`;
+    const prInfo = `${combinedInfo}${prTitle}`.trim();
+    tableData.push([maybeHandRight, prNumber, prInfo]);
+  });
+  contents += table(tableData, { stringLength: width }) + '\n';
+  contents += '\n</pr-train-toc>'
   return contents;
 }
 
@@ -99,6 +101,7 @@ function checkAndReportInvalidBaseError(e, base) {
  * @param {boolean} draft
  * @param {string} remote
  * @param {string} baseBranch
+ * @param {'text'|'table'} format
  */
 async function ensurePrsExist({
   sg,
@@ -106,7 +109,7 @@ async function ensurePrsExist({
   combinedBranch,
   draft,
   remote = DEFAULT_REMOTE,
-  baseBranch = DEFAULT_BASE_BRANCH
+  baseBranch = DEFAULT_BASE_BRANCH,
 }) {
   //const allBranches = combinedBranch ? sortedBranches.concat(combinedBranch) : sortedBranches;
   const octoClient = octo.client(readGHKey());
